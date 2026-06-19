@@ -63,6 +63,7 @@ class BoutiqueRepository(
 
     // Invoices
     val allInvoices: Flow<List<Invoice>> = invoiceDao.getAllInvoices()
+    val allInvoiceItems: Flow<List<InvoiceItem>> = invoiceItemDao.getAllInvoiceItems()
     fun getInvoicesByPaymentStatus(status: String): Flow<List<Invoice>> = invoiceDao.getInvoicesByPaymentStatus(status)
     fun getItemsForInvoice(invoiceId: Int): Flow<List<InvoiceItem>> = invoiceItemDao.getItemsForInvoice(invoiceId)
 

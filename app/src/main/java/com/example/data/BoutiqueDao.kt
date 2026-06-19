@@ -80,6 +80,9 @@ interface InvoiceItemDao {
     @Query("SELECT * FROM invoice_items WHERE invoiceId = :invoiceId")
     fun getItemsForInvoice(invoiceId: Int): Flow<List<InvoiceItem>>
 
+    @Query("SELECT * FROM invoice_items")
+    fun getAllInvoiceItems(): Flow<List<InvoiceItem>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertInvoiceItem(item: InvoiceItem): Long
 

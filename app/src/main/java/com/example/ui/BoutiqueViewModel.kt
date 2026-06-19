@@ -1016,4 +1016,323 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
         // If it does not start with a country code, you may append default prefix
         return cleaned
     }
+
+    fun shareBackupFile(onBackupShared: (Intent) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val allCl = repository.allClients.first()
+                val allSt = repository.allStockItems.first()
+                val allInv = repository.allInvoices.first()
+                val allItems = repository.allInvoiceItems.first()
+                val allLogs = repository.allLogs.first()
+
+                val rootJson = org.json.JSONObject().apply {
+                    put("version", 1)
+                    
+                    val clientsArray = org.json.JSONArray()
+                    allCl.forEach { c ->
+                        clientsArray.put(org.json.JSONObject().apply {
+                            put("id", c.id)
+                            put("name", c.name)
+                            put("phoneNumber", c.phoneNumber)
+                            put("email", c.email)
+                            put("businessName", c.businessName)
+                            put("address", c.address)
+                            put("createdAt", c.createdAt)
+                        })
+                    }
+                    put("clients", clientsArray)
+                    
+                    val stockArray = org.json.JSONArray()
+                    allSt.forEach { s ->
+                        stockArray.put(org.json.JSONObject().apply {
+                            put("id", s.id)
+                            put("name", s.name)
+                            put("sku", s.sku)
+                            put("category", s.category)
+                            put("price", s.price)
+                            put("costPrice", s.costPrice)
+                            put("stockQuantity", s.stockQuantity)
+                            put("lowStockThreshold", s.lowStockThreshold)
+                            put("description", s.description)
+                            put("lastUpdated", s.lastUpdated)
+                        })
+                    }
+                    put("stock_items", stockArray)
+
+                    val invoicesArray = org.json.JSONArray()
+                    allInv.forEach { inv ->
+                        invoicesArray.put(org.json.JSONObject().apply {
+                            put("id", inv.id)
+                            put("invoiceNumber", inv.invoiceNumber)
+                            put("clientId", inv.clientId)
+                            put("clientName", inv.clientName)
+                            put("clientPhone", inv.clientPhone)
+                            put("invoiceDate", inv.invoiceDate)
+                            put("subtotal", inv.subtotal)
+                            put("discount", inv.discount)
+                            put("tax", inv.tax)
+                            put("totalAmount", inv.totalAmount)
+                            put("paymentStatus", inv.paymentStatus)
+                            put("paymentMethod", inv.paymentMethod)
+                            put("businessName", inv.businessName)
+                            put("businessLogoText", inv.businessLogoText)
+                            put("businessPhone", inv.businessPhone)
+                            put("businessAddress", inv.businessAddress)
+                            put("notes", inv.notes)
+                            put("deliveryCharges", inv.deliveryCharges)
+                            put("cancelReason", inv.cancelReason)
+                        })
+                    }
+                    put("invoices", invoicesArray)
+
+                    val invoiceItemsArray = org.json.JSONArray()
+                    allItems.forEach { item ->
+                        invoiceItemsArray.put(org.json.JSONObject().apply {
+                            put("id", item.id)
+                            put("invoiceId", item.invoiceId)
+                            put("itemId", item.itemId)
+                            put("itemName", item.itemName)
+                            put("category", item.category)
+                            put("unitPrice", item.unitPrice)
+                            put("originalPrice", item.originalPrice)
+                            put("discountPerUnit", item.discountPerUnit)
+                            put("quantity", item.quantity)
+                            put("totalPrice", item.totalPrice)
+                        })
+                    }
+                    put("invoice_items", invoiceItemsArray)
+
+                    val logsArray = org.json.JSONArray()
+                    allLogs.forEach { log ->
+                        logsArray.put(org.json.JSONObject().apply {
+                            put("id", log.id)
+                            put("itemId", log.itemId)
+                            put("itemName", log.itemName)
+                            put("category", log.category)
+                            put("actionType", log.actionType)
+                            put("quantityChanged", log.quantityChanged)
+                            put("reorderQuantity", log.reorderQuantity)
+                            put("timestamp", log.timestamp)
+                            put("details", log.details)
+                        })
+                    }
+                    put("inventory_logs", logsArray)
+
+                    // Preferences
+                    put("biz_name", prefs.getString("biz_name", "Invoice & Inventory System"))
+                    put("biz_logo_text", prefs.getString("biz_logo_text", "BE"))
+                    put("biz_phone", prefs.getString("biz_phone", ""))
+                    put("biz_address", prefs.getString("biz_address", ""))
+                    put("biz_notes", prefs.getString("biz_notes", ""))
+                    put("show_logo", prefs.getBoolean("show_logo", true))
+                    put("app_lang", prefs.getString("app_lang", "English"))
+                    put("app_font", prefs.getString("app_font", "Royal Serif"))
+                    put("invoice_layout_id", prefs.getInt("invoice_layout_id", 3))
+                    put("theme_mode", prefs.getString("theme_mode", "Standard"))
+                    put("custom_categories", prefs.getString("custom_categories", ""))
+                }
+
+                val file = File(context.cacheDir, "one_business_solution_backup.json")
+                FileOutputStream(file).use { out ->
+                    out.write(rootJson.toString(2).toByteArray())
+                }
+
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, "One Business Solution - Data Backup")
+                    putExtra(Intent.EXTRA_TEXT, "Attached is the portable offline data backup of all clients, inventory stocks, customized price grids, and invoice checkout histories. You can open and import this file to fully restore your settings and records on any Android device running this business application.")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                viewModelScope.launch(Dispatchers.Main) {
+                    onBackupShared(intent)
+                }
+            } catch (e: Exception) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun restoreBackupFromUri(uri: Uri, onComplete: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val jsonString = inputStream?.bufferedReader()?.use { it.readText() }
+                if (jsonString.isNullOrBlank()) {
+                    viewModelScope.launch(Dispatchers.Main) {
+                        Toast.makeText(context, "Selected backup file was empty or corrupted!", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                val rootJson = org.json.JSONObject(jsonString)
+                if (!rootJson.has("clients") && !rootJson.has("stock_items") && !rootJson.has("invoices")) {
+                    viewModelScope.launch(Dispatchers.Main) {
+                        Toast.makeText(context, "File is not a valid business solution backup key!", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                // Delete state on room
+                database.clearAllTables()
+
+                // Restore Clients
+                val clientsArray = rootJson.optJSONArray("clients")
+                if (clientsArray != null) {
+                    for (i in 0 until clientsArray.length()) {
+                        val obj = clientsArray.getJSONObject(i)
+                        database.clientDao().insertClient(Client(
+                            id = obj.optInt("id", 0),
+                            name = obj.optString("name", "Client"),
+                            phoneNumber = obj.optString("phoneNumber", ""),
+                            email = obj.optString("email", ""),
+                            businessName = obj.optString("businessName", ""),
+                            address = obj.optString("address", ""),
+                            createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                        ))
+                    }
+                }
+
+                // Restore Stock Items
+                val stockArray = rootJson.optJSONArray("stock_items")
+                if (stockArray != null) {
+                    for (i in 0 until stockArray.length()) {
+                        val obj = stockArray.getJSONObject(i)
+                        database.stockItemDao().insertStockItem(StockItem(
+                            id = obj.optInt("id", 0),
+                            name = obj.optString("name", "Product Item"),
+                            sku = obj.optString("sku", ""),
+                            category = obj.optString("category", "General"),
+                            price = obj.optDouble("price", 0.0),
+                            costPrice = obj.optDouble("costPrice", 0.0),
+                            stockQuantity = obj.optInt("stockQuantity", 0),
+                            lowStockThreshold = obj.optInt("lowStockThreshold", 5),
+                            description = obj.optString("description", ""),
+                            lastUpdated = obj.optLong("lastUpdated", System.currentTimeMillis())
+                        ))
+                    }
+                }
+
+                // Restore Invoices
+                val invoicesArray = rootJson.optJSONArray("invoices")
+                if (invoicesArray != null) {
+                    for (i in 0 until invoicesArray.length()) {
+                        val obj = invoicesArray.getJSONObject(i)
+                        database.invoiceDao().insertInvoice(Invoice(
+                            id = obj.optInt("id", 0),
+                            invoiceNumber = obj.optString("invoiceNumber", ""),
+                            clientId = obj.optInt("clientId", 0),
+                            clientName = obj.optString("clientName", ""),
+                            clientPhone = obj.optString("clientPhone", ""),
+                            invoiceDate = obj.optLong("invoiceDate", System.currentTimeMillis()),
+                            subtotal = obj.optDouble("subtotal", 0.0),
+                            discount = obj.optDouble("discount", 0.0),
+                            tax = obj.optDouble("tax", 0.0),
+                            totalAmount = obj.optDouble("totalAmount", 0.0),
+                            paymentStatus = obj.optString("paymentStatus", "Paid"),
+                            paymentMethod = obj.optString("paymentMethod", "Cash"),
+                            businessName = obj.optString("businessName", ""),
+                            businessLogoText = obj.optString("businessLogoText", ""),
+                            businessPhone = obj.optString("businessPhone", ""),
+                            businessAddress = obj.optString("businessAddress", ""),
+                            notes = obj.optString("notes", ""),
+                            deliveryCharges = obj.optDouble("deliveryCharges", 0.0),
+                            cancelReason = obj.optString("cancelReason", "")
+                        ))
+                    }
+                }
+
+                // Restore Invoice Items
+                val invoiceItemsArray = rootJson.optJSONArray("invoice_items")
+                if (invoiceItemsArray != null) {
+                    for (i in 0 until invoiceItemsArray.length()) {
+                        val obj = invoiceItemsArray.getJSONObject(i)
+                        database.invoiceItemDao().insertInvoiceItem(InvoiceItem(
+                            id = obj.optInt("id", 0),
+                            invoiceId = obj.optInt("invoiceId", 0),
+                            itemId = obj.optInt("itemId", 0),
+                            itemName = obj.optString("itemName", ""),
+                            category = obj.optString("category", ""),
+                            unitPrice = obj.optDouble("unitPrice", 0.0),
+                            originalPrice = obj.optDouble("originalPrice", 0.0),
+                            discountPerUnit = obj.optDouble("discountPerUnit", 0.0),
+                            quantity = obj.optInt("quantity", 0),
+                            totalPrice = obj.optDouble("totalPrice", 0.0)
+                        ))
+                    }
+                }
+
+                // Restore Logs
+                val logsArray = rootJson.optJSONArray("inventory_logs")
+                if (logsArray != null) {
+                    for (i in 0 until logsArray.length()) {
+                        val obj = logsArray.getJSONObject(i)
+                        database.inventoryLogDao().insertLog(InventoryLog(
+                            id = obj.optInt("id", 0),
+                            itemId = obj.optInt("itemId", 0),
+                            itemName = obj.optString("itemName", ""),
+                            category = obj.optString("category", ""),
+                            actionType = obj.optString("actionType", ""),
+                            quantityChanged = obj.optInt("quantityChanged", 0),
+                            reorderQuantity = obj.optInt("reorderQuantity", 0),
+                            timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                            details = obj.optString("details", "")
+                        ))
+                    }
+                }
+
+                val listKeys = listOf(
+                    "biz_name", "biz_logo_text", "biz_phone", "biz_address", "biz_notes",
+                    "show_logo", "app_lang", "app_font", "invoice_layout_id", "theme_mode", "custom_categories"
+                )
+                val editor = prefs.edit()
+                listKeys.forEach { key ->
+                    if (rootJson.has(key)) {
+                        when (key) {
+                            "show_logo" -> editor.putBoolean(key, rootJson.optBoolean(key, true))
+                            "invoice_layout_id" -> editor.putInt(key, rootJson.optInt(key, 3))
+                            else -> editor.putString(key, rootJson.optString(key, ""))
+                        }
+                    }
+                }
+                editor.apply()
+
+                // Sync main-thread VM States
+                viewModelScope.launch(Dispatchers.Main) {
+                    _businessName.value = prefs.getString("biz_name", "Invoice & Inventory System") ?: "Invoice & Inventory System"
+                    _businessLogoText.value = prefs.getString("biz_logo_text", "BE") ?: "BE"
+                    _businessPhone.value = prefs.getString("biz_phone", "") ?: ""
+                    _businessAddress.value = prefs.getString("biz_address", "") ?: ""
+                    _customInvoiceNotes.value = prefs.getString("biz_notes", "") ?: ""
+                    _showLogoOnInvoice.value = prefs.getBoolean("show_logo", true)
+                    _appLanguage.value = prefs.getString("app_lang", "English") ?: "English"
+                    _selectedFontType.value = prefs.getString("app_font", "Royal Serif") ?: "Royal Serif"
+                    _invoiceLayoutId.value = prefs.getInt("invoice_layout_id", 3)
+                    _themeMode.value = prefs.getString("theme_mode", "Standard") ?: "Standard"
+                    
+                    val savedCategories = prefs.getString("custom_categories", null)
+                    if (savedCategories != null && savedCategories.isNotBlank()) {
+                        _categories.value = savedCategories.split(";;;").filter { it.isNotBlank() }
+                    }
+
+                    Toast.makeText(context, "Full Enterprise Database Restored Successfully! 🎉", Toast.LENGTH_LONG).show()
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 }

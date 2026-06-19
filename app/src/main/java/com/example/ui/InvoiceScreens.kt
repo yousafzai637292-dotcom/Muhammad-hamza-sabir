@@ -3606,6 +3606,129 @@ fun ReportsAndBrandingScreen(
                 }
             }
         }
+
+        // GOOGLE DRIVE ENTERPRISE PORTABLE BACKUP & RESTORE PANEL
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("backup_drive_panel"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Cloud,
+                                contentDescription = "Cloud Icon",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Text(
+                            text = "GOOGLE DRIVE BACKUP & RESTORE",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Text(
+                        text = "Safeguard your multi-business transactions, active inventory stock audits, clients database, and custom branding settings by saving a secure backup file directly in your Google Drive folder.",
+                        fontSize = 10.5.sp,
+                        color = Color.GRAY,
+                        lineHeight = 14.sp
+                    )
+
+                    val context = LocalContext.current
+                    
+                    val filePickerLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.GetContent()
+                    ) { uri: Uri? ->
+                        uri?.let {
+                            viewModel.restoreBackupFromUri(it)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // BACKUP AND SHARE BUTTON (Shares JSON file which can be saved to Drive or other storage)
+                        Button(
+                            onClick = {
+                                viewModel.shareBackupFile { intent ->
+                                    context.startActivity(Intent.createChooser(intent, "Save Enterprise Backup via"))
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Upload,
+                                contentDescription = "Backup Upload",
+                                tint = Color.WHITE,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Backup", fontWeight = FontWeight.Bold, color = Color.WHITE, fontSize = 11.sp, maxLines = 1)
+                        }
+
+                        // RESTORE FROM BACKUP FILE BUTTON
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    filePickerLauncher.launch("application/json")
+                                } catch (e: Exception) {
+                                    filePickerLauncher.launch("*/*")
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Restore Download",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restore File", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                    
+                    // Simple Guide Banner
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.04f))
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text("Safe Cloud Backup Instructions:", fontWeight = FontWeight.Bold, fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("1. Click \"Save Backup\" and select \"Google Drive\" to save this file to your drive safely.", fontSize = 8.5.sp, color = Color.DarkGray)
+                            Text("2. To restore, click \"Restore File\", sign in to Google Drive if required, and pick your JSON backup file.", fontSize = 8.5.sp, color = Color.DarkGray)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
