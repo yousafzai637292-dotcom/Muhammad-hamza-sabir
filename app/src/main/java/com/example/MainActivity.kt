@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.BoutiqueAppScreen
 import com.example.ui.BoutiqueViewModel
 import com.example.ui.theme.MyApplicationTheme
@@ -17,11 +19,26 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
+      val viewModel: BoutiqueViewModel = viewModel()
+      val activeLayoutId by viewModel.invoiceLayoutId.collectAsStateWithLifecycle()
+      val selectedFontType by viewModel.selectedFontType.collectAsStateWithLifecycle()
+      val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+
+      val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
+      val resolvedDarkTheme = when (themeMode) {
+        "Light" -> false
+        "Dark" -> true
+        else -> systemInDark
+      }
+
+      MyApplicationTheme(
+        activeLayoutId = activeLayoutId,
+        selectedFontType = selectedFontType,
+        darkTheme = resolvedDarkTheme
+      ) {
         Surface(
           modifier = Modifier.fillMaxSize()
         ) {
-          val viewModel: BoutiqueViewModel = viewModel()
           BoutiqueAppScreen(viewModel = viewModel)
         }
       }

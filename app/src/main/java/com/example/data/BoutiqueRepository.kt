@@ -127,6 +127,10 @@ class BoutiqueRepository(
         }
     }
 
+    suspend fun updateInvoiceEntire(invoice: Invoice) {
+        invoiceDao.updateInvoice(invoice)
+    }
+
     suspend fun deleteInvoice(invoice: Invoice) {
         invoiceItemDao.deleteItemsForInvoice(invoice.id)
         invoiceDao.deleteInvoice(invoice)
@@ -139,4 +143,8 @@ class BoutiqueRepository(
     // Logs
     val allLogs: Flow<List<InventoryLog>> = inventoryLogDao.getAllLogs()
     fun getLogsForItem(itemId: Int): Flow<List<InventoryLog>> = inventoryLogDao.getLogsForItem(itemId)
+
+    suspend fun insertLog(log: InventoryLog) {
+        inventoryLogDao.insertLog(log)
+    }
 }

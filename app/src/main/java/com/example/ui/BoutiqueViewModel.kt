@@ -11,6 +11,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -64,6 +72,12 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
     val inventoryLogs: StateFlow<List<InventoryLog>> = repository.allLogs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Dynamic Categories list states (Users can add or remove categories)
+    private val _categories = MutableStateFlow<List<String>>(
+        listOf("Cosmetics", "Shoes & Sandals", "Perfumes", "Children's Clothing")
+    )
+    val categories: StateFlow<List<String>> = _categories.asStateFlow()
+
     // Invoice Draft State (The Cart)
     private val _selectedClientForInvoice = MutableStateFlow<Client?>(null)
     val selectedClientForInvoice: StateFlow<Client?> = _selectedClientForInvoice.asStateFlow()
@@ -71,6 +85,10 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
     // Maps stockItemId -> Quantity
     private val _invoiceCart = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val invoiceCart: StateFlow<Map<Int, Int>> = _invoiceCart.asStateFlow()
+
+    // Maps stockItemId -> Billed S.P. (customizable)
+    private val _cartCustomPrices = MutableStateFlow<Map<Int, Double>>(emptyMap())
+    val cartCustomPrices: StateFlow<Map<Int, Double>> = _cartCustomPrices.asStateFlow()
 
     private val _invoiceDiscount = MutableStateFlow(0.0)
     val invoiceDiscount: StateFlow<Double> = _invoiceDiscount.asStateFlow()
@@ -90,6 +108,16 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
 
     fun selectInvoiceLayout(layoutId: Int) {
         _invoiceLayoutId.value = layoutId
+        prefs.edit().putInt("invoice_layout_id", layoutId).apply()
+    }
+
+    // App Style Theme Mode (Light, Dark, Standard)
+    private val _themeMode = MutableStateFlow("Standard")
+    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: String) {
+        _themeMode.value = mode
+        prefs.edit().putString("theme_mode", mode).apply()
     }
 
     // Selected SMS / WhatsApp Custom Template ID
@@ -101,20 +129,169 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
     }
 
     // Customizable Invoice Branding States
-    private val _businessName = MutableStateFlow("Boutique Elegance")
+    private val _businessName = MutableStateFlow("Invoice & Inventory System")
     val businessName: StateFlow<String> = _businessName.asStateFlow()
 
     private val _businessLogoText = MutableStateFlow("BE")
     val businessLogoText: StateFlow<String> = _businessLogoText.asStateFlow()
 
-    private val _businessPhone = MutableStateFlow("+1 555-867-5309")
+    private val _businessPhone = MutableStateFlow("+92 300 1234567")
     val businessPhone: StateFlow<String> = _businessPhone.asStateFlow()
 
-    private val _businessAddress = MutableStateFlow("101 Luxury Mall, Boutique St.")
+    private val _businessAddress = MutableStateFlow("One Business Suite, Suite 101")
     val businessAddress: StateFlow<String> = _businessAddress.asStateFlow()
 
     private val _customInvoiceNotes = MutableStateFlow("Thank you for shopping! Exchange within 7 days with original tag.")
     val customInvoiceNotes: StateFlow<String> = _customInvoiceNotes.asStateFlow()
+
+    private val _invoiceDeliveryCharges = MutableStateFlow(0.0)
+    val invoiceDeliveryCharges: StateFlow<Double> = _invoiceDeliveryCharges.asStateFlow()
+
+    fun setInvoiceDeliveryCharges(charges: Double) {
+        _invoiceDeliveryCharges.value = charges
+    }
+
+    private val _appLanguage = MutableStateFlow("English")
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    fun setAppLanguage(lang: String) {
+        _appLanguage.value = lang
+        prefs.edit().putString("app_lang", lang).apply()
+    }
+
+    private val _selectedFontType = MutableStateFlow("Royal Serif")
+    val selectedFontType: StateFlow<String> = _selectedFontType.asStateFlow()
+
+    fun setSelectedFontType(font: String) {
+        _selectedFontType.value = font
+        prefs.edit().putString("app_font", font).apply()
+    }
+
+    private val _messagingMode = MutableStateFlow(0)
+    val messagingMode: StateFlow<Int> = _messagingMode.asStateFlow()
+
+    private val _whatsappApiUrl = MutableStateFlow("")
+    val whatsappApiUrl: StateFlow<String> = _whatsappApiUrl.asStateFlow()
+
+    private val _whatsappApiKey = MutableStateFlow("")
+    val whatsappApiKey: StateFlow<String> = _whatsappApiKey.asStateFlow()
+
+    private val _smsApiUrl = MutableStateFlow("")
+    val smsApiUrl: StateFlow<String> = _smsApiUrl.asStateFlow()
+
+    private val _smsApiKey = MutableStateFlow("")
+    val smsApiKey: StateFlow<String> = _smsApiKey.asStateFlow()
+
+    fun updateMessagingSettings(mode: Int, waUrl: String, waKey: String, smsUrl: String, smsKey: String) {
+        _messagingMode.value = mode
+        _whatsappApiUrl.value = waUrl
+        _whatsappApiKey.value = waKey
+        _smsApiUrl.value = smsUrl
+        _smsApiKey.value = smsKey
+
+        prefs.edit().apply {
+            putInt("messaging_mode", mode)
+            putString("wa_api_url", waUrl)
+            putString("wa_api_key", waKey)
+            putString("sms_api_url", smsUrl)
+            putString("sms_api_key", smsKey)
+            apply()
+        }
+    }
+
+    fun addCategory(categoryName: String) {
+        val trimmed = categoryName.trim()
+        if (trimmed.isEmpty()) return
+        val current = _categories.value.toMutableList()
+        if (!current.contains(trimmed)) {
+            current.add(trimmed)
+            _categories.value = current
+            prefs.edit().putString("custom_categories", current.joinToString(";;;")).apply()
+        }
+    }
+
+    fun removeCategory(categoryName: String) {
+        val current = _categories.value.toMutableList()
+        if (current.contains(categoryName)) {
+            current.remove(categoryName)
+            _categories.value = current
+            prefs.edit().putString("custom_categories", current.joinToString(";;;")).apply()
+        }
+    }
+
+    private val _businessLogoUri = MutableStateFlow<String?>(null)
+    val businessLogoUri: StateFlow<String?> = _businessLogoUri.asStateFlow()
+
+    private val _showLogoOnInvoice = MutableStateFlow(true)
+    val showLogoOnInvoice: StateFlow<Boolean> = _showLogoOnInvoice.asStateFlow()
+
+    private val prefs = context.getSharedPreferences("boutique_prefs", Context.MODE_PRIVATE)
+
+    init {
+        _businessName.value = prefs.getString("biz_name", "Invoice & Inventory System") ?: "Invoice & Inventory System"
+        _businessLogoText.value = prefs.getString("biz_logo_text", "BE") ?: "BE"
+        _businessPhone.value = prefs.getString("biz_phone", "+92 300 1234567") ?: "+92 300 1234567"
+        _businessAddress.value = prefs.getString("biz_address", "One Business Suite, Suite 101") ?: "One Business Suite, Suite 101"
+        _customInvoiceNotes.value = prefs.getString("biz_notes", "Thank you for shopping! Exchange within 7 days with original tag.") ?: "Thank you for shopping! Exchange within 7 days with original tag."
+        _showLogoOnInvoice.value = prefs.getBoolean("show_logo", true)
+        _appLanguage.value = prefs.getString("app_lang", "English") ?: "English"
+        _selectedFontType.value = prefs.getString("app_font", "Royal Serif") ?: "Royal Serif"
+        _invoiceLayoutId.value = prefs.getInt("invoice_layout_id", 3)
+        _themeMode.value = prefs.getString("theme_mode", "Standard") ?: "Standard"
+        
+        _messagingMode.value = prefs.getInt("messaging_mode", 0)
+        _whatsappApiUrl.value = prefs.getString("wa_api_url", "https://api.sms-gateway.example/whatsapp/send") ?: "https://api.sms-gateway.example/whatsapp/send"
+        _whatsappApiKey.value = prefs.getString("wa_api_key", "") ?: ""
+        _smsApiUrl.value = prefs.getString("sms_api_url", "https://api.sms-gateway.example/sms/send") ?: "https://api.sms-gateway.example/sms/send"
+        _smsApiKey.value = prefs.getString("sms_api_key", "") ?: ""
+        
+        val savedCategories = prefs.getString("custom_categories", null)
+        if (savedCategories != null) {
+            _categories.value = savedCategories.split(";;;").filter { it.isNotBlank() }
+        } else {
+            _categories.value = listOf("Cosmetics", "Shoes & Sandals", "Perfumes", "Children's Clothing")
+        }
+        
+        val file = File(context.filesDir, "brand_logo.png")
+        if (file.exists()) {
+            _businessLogoUri.value = file.absolutePath
+        }
+    }
+
+    fun uploadLogoImage(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val file = File(context.filesDir, "brand_logo.png")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(file).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                _businessLogoUri.value = file.absolutePath
+                _showLogoOnInvoice.value = true
+                prefs.edit().putBoolean("show_logo", true).apply()
+                Toast.makeText(context, "Logo uploaded successfully!", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to upload logo: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun removeLogoImage() {
+        val file = File(context.filesDir, "brand_logo.png")
+        if (file.exists()) {
+            file.delete()
+        }
+        _businessLogoUri.value = null
+        _showLogoOnInvoice.value = false
+        prefs.edit().putBoolean("show_logo", false).apply()
+        Toast.makeText(context, "Logo removed!", Toast.LENGTH_SHORT).show()
+    }
+
+    fun setShowLogoOnInvoice(show: Boolean) {
+        _showLogoOnInvoice.value = show
+        prefs.edit().putBoolean("show_logo", show).apply()
+    }
 
     // Action Methods
     fun updateClientSearch(query: String) { _clientSearchQuery.value = query }
@@ -127,6 +304,16 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
         _businessPhone.value = phone
         _businessAddress.value = address
         _customInvoiceNotes.value = notes
+
+        prefs.edit().apply {
+            putString("biz_name", name)
+            putString("biz_logo_text", logoText)
+            putString("biz_phone", phone)
+            putString("biz_address", address)
+            putString("biz_notes", notes)
+            apply()
+        }
+        Toast.makeText(context, "Branding settings saved!", Toast.LENGTH_SHORT).show()
     }
 
     // Client Management
@@ -149,17 +336,120 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
     }
 
     // Inventory Management
-    fun addStockItem(name: String, category: String, price: Double, stock: Int, threshold: Int, sku: String, description: String) {
+    fun addStockItem(name: String, category: String, price: Double, costPrice: Double, stock: Int, threshold: Int, sku: String, description: String) {
         viewModelScope.launch {
             repository.insertStockItem(StockItem(
                 name = name,
                 category = category,
                 price = price,
+                costPrice = costPrice,
                 stockQuantity = stock,
                 lowStockThreshold = threshold,
                 sku = sku,
                 description = description
             ))
+        }
+    }
+
+    fun prepopulateDemoStocks() {
+        viewModelScope.launch {
+            val demoItems = listOf(
+                StockItem(
+                    name = "Velvet Matte Crimson Lipstick",
+                    category = "Cosmetics",
+                    price = 1200.0,
+                    costPrice = 750.0,
+                    stockQuantity = 25,
+                    lowStockThreshold = 5,
+                    sku = "COS-LIP-CRM",
+                    description = "Charming high-pigmentation lipstick featuring a continuous 12h comfortable wear finish."
+                ),
+                StockItem(
+                    name = "Rose Gold Glitter Powder",
+                    category = "Cosmetics",
+                    price = 1850.0,
+                    costPrice = 1100.0,
+                    stockQuantity = 4,
+                    lowStockThreshold = 5,
+                    sku = "COS-POW-RGD",
+                    description = "Ultra-fine sparkling body dust and highlight powder with luxury silk base extracts."
+                ),
+                StockItem(
+                    name = "Aqua Hydrating Matte Foundation",
+                    category = "Cosmetics",
+                    price = 2600.0,
+                    costPrice = 1500.0,
+                    stockQuantity = 3,
+                    lowStockThreshold = 5,
+                    sku = "COS-FND-AQM",
+                    description = "Sweatproof and non-greasy full protection face finish, suitable for humid climates."
+                ),
+                StockItem(
+                    name = "Stella Pearl Court Heels",
+                    category = "Shoes & Sandals",
+                    price = 4500.0,
+                    costPrice = 2200.0,
+                    stockQuantity = 12,
+                    lowStockThreshold = 3,
+                    sku = "SH-HLS-PRL",
+                    description = "Charming 3-inch white silk wedding court pumps elegantly laden with hand-sewn beads."
+                ),
+                StockItem(
+                    name = "Comfy Meadow Summer Slides",
+                    category = "Shoes & Sandals",
+                    price = 2200.0,
+                    costPrice = 1200.0,
+                    stockQuantity = 1,
+                    lowStockThreshold = 3,
+                    sku = "SH-SLD-MDS",
+                    description = "Super lightweight slip-resistant rubber cushion memory soles in aesthetic lavender."
+                ),
+                StockItem(
+                    name = "Nectar Bloom Cologne Mist",
+                    category = "Perfumes",
+                    price = 6800.0,
+                    costPrice = 3800.0,
+                    stockQuantity = 15,
+                    lowStockThreshold = 4,
+                    sku = "PER-MIST-NCT",
+                    description = "Sweet delightful refreshing summer peony aroma infused with natural white orchid oil."
+                ),
+                StockItem(
+                    name = "Imperial Oud Intense Eau de Parfum",
+                    category = "Perfumes",
+                    price = 13500.0,
+                    costPrice = 7500.0,
+                    stockQuantity = 5,
+                    lowStockThreshold = 2,
+                    sku = "PER-OUD-IMP",
+                    description = "Premium high-grade Cambodian Oud oil accompanied by rich spiced sandalwood base notes."
+                ),
+                StockItem(
+                    name = "Cotton Flower Frock (Ages 2-6)",
+                    category = "Children's Clothing",
+                    price = 1950.0,
+                    costPrice = 900.0,
+                    stockQuantity = 18,
+                    lowStockThreshold = 5,
+                    sku = "CLO-KID-FRK",
+                    description = "Lovely breathable 100% organic cotton pastel yellow frock, absolute child skin-safe."
+                ),
+                StockItem(
+                    name = "Charming Linen Suspenders Set",
+                    category = "Children's Clothing",
+                    price = 2400.0,
+                    costPrice = 1250.0,
+                    stockQuantity = 2,
+                    lowStockThreshold = 4,
+                    sku = "CLO-KID-SUP",
+                    description = "Stylish beige linen shorts and soft cotton shirt combo designed with cute adjustable suspenders."
+                )
+            )
+            for (item in demoItems) {
+                // Ensure dynamic categories updated if user does not have default ones
+                addCategory(item.category)
+                repository.insertStockItem(item)
+            }
         }
     }
 
@@ -202,16 +492,28 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
         _invoiceCart.value = current
     }
 
+    fun updateCartCustomPrice(itemId: Int, customPrice: Double) {
+        val current = _cartCustomPrices.value.toMutableMap()
+        current[itemId] = customPrice
+        _cartCustomPrices.value = current
+    }
+
     fun removeItemFromInvoice(itemId: Int) {
         val current = _invoiceCart.value.toMutableMap()
         current.remove(itemId)
         _invoiceCart.value = current
+        
+        val prices = _cartCustomPrices.value.toMutableMap()
+        prices.remove(itemId)
+        _cartCustomPrices.value = prices
     }
 
     fun clearInvoiceCart() {
         _invoiceCart.value = emptyMap()
+        _cartCustomPrices.value = emptyMap()
         _selectedClientForInvoice.value = null
         _invoiceDiscount.value = 0.0
+        _invoiceDeliveryCharges.value = 0.0
     }
 
     fun updateInvoiceFees(discount: Double, tax: Double) {
@@ -239,30 +541,44 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             var subtotal = 0.0
+            var totalItemDiscounts = 0.0
             val invoiceItems = mutableListOf<InvoiceItem>()
 
             for ((itemId, qty) in cart) {
                 val stockItem = itemsList.find { it.id == itemId }
                 if (stockItem != null) {
-                    val lineTotal = stockItem.price * qty
-                    subtotal += lineTotal
+                    val standardSP = stockItem.price
+                    val billedSP = _cartCustomPrices.value[itemId] ?: standardSP
+                    val discountPerUnitVal = (standardSP - billedSP).coerceAtLeast(0.0)
+                    
+                    val originalLineTotal = standardSP * qty
+                    val billedLineTotal = billedSP * qty
+                    
+                    subtotal += originalLineTotal
+                    totalItemDiscounts += (discountPerUnitVal * qty)
+                    
                     invoiceItems.add(
                         InvoiceItem(
                             invoiceId = 0, // setup during insertion
                             itemId = itemId,
                             itemName = stockItem.name,
                             category = stockItem.category,
-                            unitPrice = stockItem.price,
+                            unitPrice = billedSP,
+                            originalPrice = standardSP,
+                            discountPerUnit = discountPerUnitVal,
                             quantity = qty,
-                            totalPrice = lineTotal
+                            totalPrice = billedLineTotal
                         )
                     )
                 }
             }
 
-            val discount = _invoiceDiscount.value
-            val taxAmount = (subtotal - discount).coerceAtLeast(0.0) * (_invoiceTaxRate.value / 100.0)
-            val grandTotal = (subtotal - discount).coerceAtLeast(0.0) + taxAmount
+            val globalDiscount = _invoiceDiscount.value
+            val combinedDiscount = totalItemDiscounts + globalDiscount
+            val finalSubtotalAfterDiscount = (subtotal - combinedDiscount).coerceAtLeast(0.0)
+            val taxAmount = finalSubtotalAfterDiscount * (_invoiceTaxRate.value / 100.0)
+            val dCharges = _invoiceDeliveryCharges.value
+            val grandTotal = finalSubtotalAfterDiscount + taxAmount + dCharges
 
             val invoice = Invoice(
                 invoiceNumber = "", // Generated sequentially in repository
@@ -270,7 +586,7 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 clientName = client.name,
                 clientPhone = client.phoneNumber,
                 subtotal = subtotal,
-                discount = discount,
+                discount = combinedDiscount,
                 tax = taxAmount,
                 totalAmount = grandTotal,
                 paymentStatus = _selectedPaymentStatus.value,
@@ -279,7 +595,8 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 businessLogoText = _businessLogoText.value,
                 businessPhone = _businessPhone.value,
                 businessAddress = _businessAddress.value,
-                notes = _customInvoiceNotes.value
+                notes = _customInvoiceNotes.value,
+                deliveryCharges = dCharges
             )
 
             val invoiceId = repository.insertInvoiceWithItems(invoice, invoiceItems)
@@ -303,6 +620,50 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
     fun deleteInvoice(invoice: Invoice) {
         viewModelScope.launch {
             repository.deleteInvoice(invoice)
+        }
+    }
+
+    fun cancelOrReverseInvoice(invoice: Invoice, reason: String) {
+        viewModelScope.launch {
+            try {
+                // 1. Mark status as "CANCELED" and set cancellation reason
+                val updatedInvoice = invoice.copy(
+                    paymentStatus = "Canceled",
+                    cancelReason = reason,
+                    notes = "${invoice.notes} [CANCELED: $reason]"
+                )
+                repository.updateInvoiceEntire(updatedInvoice)
+
+                // 2. Restore items block
+                val items = repository.getInvoiceItems(invoice.id)
+                for (item in items) {
+                    val stockItem = allStockItems.value.find { it.id == item.itemId }
+                    if (stockItem != null) {
+                        val restoredStock = stockItem.copy(
+                            stockQuantity = stockItem.stockQuantity + item.quantity
+                        )
+                        repository.updateStockItem(
+                            restoredStock,
+                            manualChangeAmount = item.quantity
+                        )
+                        // Log detailing recovery
+                        repository.insertLog(
+                            InventoryLog(
+                                itemId = item.itemId,
+                                itemName = item.itemName,
+                                category = item.category,
+                                actionType = "MANUAL_ADJUST",
+                                quantityChanged = item.quantity,
+                                reorderQuantity = restoredStock.stockQuantity,
+                                details = "Reversal: Billed items returned from canceled invoice ${invoice.invoiceNumber}. Reason: $reason"
+                            )
+                        )
+                    }
+                }
+                Toast.makeText(context, "Invoice ${invoice.invoiceNumber} Canceled & Stock Reversed! Reasons recoded.", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error reversing invoice: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -366,28 +727,109 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun sendWhatsAppMessage(invoiceNum: String) {
+    fun sendWhatsAppMessage(invoiceNum: String, customPhone: String? = null) {
         val invoice = invoices.value.find { it.invoiceNumber == invoiceNum }
         if (invoice == null) return
         
         val msgText = composePrefilledMsg(invoice)
-        triggerWhatsAppWaMeLink(invoice.clientPhone, msgText)
+        val targetPhone = customPhone ?: invoice.clientPhone
+        
+        if (_messagingMode.value == 1) {
+            sendDirectGatewayApi(
+                url = _whatsappApiUrl.value,
+                key = _whatsappApiKey.value,
+                phone = targetPhone,
+                message = msgText,
+                type = "WhatsApp"
+            )
+        } else {
+            triggerWhatsAppWaMeLink(targetPhone, msgText)
+        }
     }
 
-    fun sendSimSms(invoiceNum: String) {
+    fun sendSimSms(invoiceNum: String, customPhone: String? = null) {
         val invoice = invoices.value.find { it.invoiceNumber == invoiceNum }
         if (invoice == null) return
 
         val msg = composePrefilledMsg(invoice)
-        try {
-            val uri = Uri.parse("smsto:${invoice.clientPhone}")
-            val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
-                putExtra("sms_body", msg)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val targetPhone = customPhone ?: invoice.clientPhone
+        
+        if (_messagingMode.value == 1) {
+            sendDirectGatewayApi(
+                url = _smsApiUrl.value,
+                key = _smsApiKey.value,
+                phone = targetPhone,
+                message = msg,
+                type = "SMS"
+            )
+        } else {
+            try {
+                val uri = Uri.parse("smsto:$targetPhone")
+                val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+                    putExtra("sms_body", msg)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not open SMS text composer!", Toast.LENGTH_SHORT).show()
             }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Could not open SMS text composer!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sendDirectGatewayApi(url: String, key: String, phone: String, message: String, type: String) {
+        if (url.isBlank()) {
+            Toast.makeText(context, "Error: $type Gateway URL is empty. Please set it in Settings.", Toast.LENGTH_LONG).show()
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                val jsonObject = JSONObject().apply {
+                    put("to", phone)
+                    put("message", message)
+                    put("apiKey", key)
+                }
+                
+                val body = jsonObject.toString().toRequestBody(mediaType)
+                
+                val finalUrl = if (url.contains("{phone}") || url.contains("{message}")) {
+                    url.replace("{phone}", Uri.encode(phone))
+                       .replace("{message}", Uri.encode(message))
+                       .replace("{key}", Uri.encode(key))
+                } else {
+                    url
+                }
+
+                val requestBuilder = Request.Builder().url(finalUrl)
+                
+                if (key.isNotBlank()) {
+                    requestBuilder.addHeader("Authorization", "Bearer $key")
+                }
+                
+                val request = if (url.contains("{phone}")) {
+                    requestBuilder.get().build()
+                } else {
+                    requestBuilder.post(body).build()
+                }
+
+                client.newCall(request).execute().use { response ->
+                    val isSuccessful = response.isSuccessful
+                    val code = response.code
+                    launch(Dispatchers.Main) {
+                        if (isSuccessful) {
+                            Toast.makeText(context, "✅ $type Gateway Alert Sent Successfully!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "❌ $type Gateway Failed: Code $code", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: "Unknown Connection Error"
+                launch(Dispatchers.Main) {
+                    Toast.makeText(context, "❌ Gateway Error: $errorMsg", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -423,7 +865,7 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
 
             val file = PdfGenerator.generateReportPdf(
                 context = context,
-                reportTitle = "Audit Report - All Registered boutique periods: $currentPeriod",
+                reportTitle = "Audit Report - All Registered business periods: $currentPeriod",
                 totalSales = sumTotal,
                 paidInvoicesCount = paidCount,
                 unpaidInvoicesCount = unpaidCount,
@@ -452,14 +894,14 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 Thank you for shopping with us! Here are your order bill details:
                 - Business: $bName
                 - Invoice Ref: $invoiceNum
-                - Bill Total: ${'$'}149.99
+                - Bill Total: PKR 149.99
                 - Payment Status: PAID
                 - Payment Mode: Cash
                 
                 Shop Contact: $bPhone
                 We have attached your printable PDF billing receipt!
                 
-                Boutique Elegance.
+                Invoice & Inventory System.
                 """.trimIndent()
             }
             2 -> {
@@ -468,12 +910,12 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 
                 We are delighted to present your curated selection from $bName:
                 - Collection Ref: $invoiceNum
-                - Tailored Total: ${'$'}149.99
+                - Tailored Total: PKR 149.99
                 - Receipt Status: PAID (Cash)
                 
                 Should you require further styling assistance, contact $bPhone.
                 
-                Vintage Boutique Luxury.
+                Vintage Premium Luxury.
                 """.trimIndent()
             }
             3 -> {
@@ -481,7 +923,7 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 $bName BILLING
                 Ref: $invoiceNum
                 Client: Samantha Parker
-                Amount: ${'$'}149.99 (PAID)
+                Amount: PKR 149.99 (PAID)
                 Mode: Cash
                 Support: $bPhone
                 Thank you!
@@ -493,18 +935,18 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 
                 Your stylish selection from $bName is official!
                 Order Ref: $invoiceNum
-                Grand Total: ${'$'}149.99 (PAID)
+                Grand Total: PKR 149.99 (PAID)
                 
                 Have any styling or custom design questions? Chat with our team at $bPhone!
                 """.trimIndent()
             }
-            else -> "Hello Samantha Parker, your luxury order from $bName is ready! Total: ${'$'}149.99."
+            else -> "Hello Samantha Parker, your luxury order from $bName is ready! Total: PKR 149.99."
         }
     }
 
     // Helper utilities
     private fun composePrefilledMsg(invoice: Invoice): String {
-        val totalFormatted = String.format(Locale.US, "$%.2f", invoice.totalAmount)
+        val totalFormatted = String.format(Locale.US, "PKR %.2f", invoice.totalAmount)
         return when (_smsTemplateId.value) {
             1 -> {
                 """
@@ -520,7 +962,7 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 Shop Contact: ${invoice.businessPhone}
                 We have attached your printable PDF billing receipt!
                 
-                Boutique Elegance.
+                Invoice & Inventory System.
                 """.trimIndent()
             }
             2 -> {
@@ -534,7 +976,7 @@ class BoutiqueViewModel(application: Application) : AndroidViewModel(application
                 
                 Should you require further styling assistance, contact ${invoice.businessPhone}.
                 
-                Vintage Boutique Luxury.
+                Vintage Premium Luxury.
                 """.trimIndent()
             }
             3 -> {

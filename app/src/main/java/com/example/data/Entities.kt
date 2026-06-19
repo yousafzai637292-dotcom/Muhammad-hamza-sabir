@@ -20,7 +20,8 @@ data class StockItem(
     val name: String,
     val sku: String = "",
     val category: String, // "Cosmetics", "Shoes & Sandals", "Perfumes", "Children's Clothing"
-    val price: Double,
+    val price: Double, // This is the standard S.P. (Selling Price)
+    val costPrice: Double = 0.0, // This is the standard C.P. (Cost Price)
     val stockQuantity: Int,
     val lowStockThreshold: Int = 5,
     val description: String = "",
@@ -41,11 +42,13 @@ data class Invoice(
     val totalAmount: Double,
     val paymentStatus: String, // "Paid", "Unpaid", "Partial"
     val paymentMethod: String = "Cash", // "Cash", "Card", "Online", "WhatsApp Pay"
-    val businessName: String = "Boutique Elegance", // customizable branding
+    val businessName: String = "Invoice & Inventory System", // customizable branding
     val businessLogoText: String = "BE",
     val businessPhone: String = "",
     val businessAddress: String = "",
-    val notes: String = ""
+    val notes: String = "",
+    val deliveryCharges: Double = 0.0,
+    val cancelReason: String = ""
 )
 
 @Entity(tableName = "invoice_items")
@@ -55,7 +58,9 @@ data class InvoiceItem(
     val itemId: Int,    // references StockItem.id
     val itemName: String,
     val category: String,
-    val unitPrice: Double,
+    val unitPrice: Double, // Billed S.P. after itemized discount
+    val originalPrice: Double = 0.0, // Original S.P. prior to discount
+    val discountPerUnit: Double = 0.0, // Discount amount per item unit
     val quantity: Int,
     val totalPrice: Double
 )

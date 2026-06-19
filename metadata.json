@@ -1,6 +1,6 @@
 {
-  "name": "Boutique Billing & Stock",
-  "description": "Boutique invoice billing with customizable branding, PDF downloads, client database management, automatic low-stock alerts, and seamless integration with WhatsApp and SIM SMS text messaging.",
+  "name": "\"One Business Solution\" (By Hamza)",
+  "description": "Premium multi-business invoice billing, inventory stock control, client database, custom PDF reports, and messaging integrations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

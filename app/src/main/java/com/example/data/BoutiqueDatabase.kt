@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
         InvoiceItem::class,
         InventoryLog::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class BoutiqueDatabase : RoomDatabase() {
@@ -39,6 +39,7 @@ abstract class BoutiqueDatabase : RoomDatabase() {
                     BoutiqueDatabase::class.java,
                     "boutique_database"
                 )
+                    .fallbackToDestructiveMigration()
                     .addCallback(BoutiqueDatabaseCallback(scope))
                     .build()
                 INSTANCE = instance
@@ -76,22 +77,22 @@ abstract class BoutiqueDatabase : RoomDatabase() {
             // Prepopulate Stock Items (Cosmetics, Shoes & Sandals, Perfumes, Children's Clothing)
             val items = listOf(
                 // Cosmetics
-                StockItem(name = "Silk Touch Hydrating Lipstick", category = "Cosmetics", price = 22.00, stockQuantity = 15, lowStockThreshold = 4, description = "Long-lasting velvety hydrating lipstick in crimson blush."),
-                StockItem(name = "Matte Foundation Rose Ivory", category = "Cosmetics", price = 35.00, stockQuantity = 3, lowStockThreshold = 5, description = "Flawless coverage matte foundation with SPF 15."),
-                StockItem(name = "Glaze Pearl Liquid Eyeshadow", category = "Cosmetics", price = 26.00, stockQuantity = 8, lowStockThreshold = 2, description = "Highly pigmented rose gold metallic shimmering eyeshadow."),
+                StockItem(name = "Silk Touch Hydrating Lipstick", category = "Cosmetics", price = 22.00, costPrice = 12.00, stockQuantity = 15, lowStockThreshold = 4, description = "Long-lasting velvety hydrating lipstick in crimson blush."),
+                StockItem(name = "Matte Foundation Rose Ivory", category = "Cosmetics", price = 35.00, costPrice = 18.00, stockQuantity = 3, lowStockThreshold = 5, description = "Flawless coverage matte foundation with SPF 15."),
+                StockItem(name = "Glaze Pearl Liquid Eyeshadow", category = "Cosmetics", price = 26.00, costPrice = 14.00, stockQuantity = 8, lowStockThreshold = 2, description = "Highly pigmented rose gold metallic shimmering eyeshadow."),
                 
                 // Shoes & Sandals
-                StockItem(name = "Stella Champagne Mesh Heels", category = "Shoes & Sandals", price = 115.00, stockQuantity = 12, lowStockThreshold = 3, description = "Gorgeous 3-inch champagne stiletto heels with rhinestone straps."),
-                StockItem(name = "Isla Pearl White Bridal Heel", category = "Shoes & Sandals", price = 130.00, stockQuantity = 4, lowStockThreshold = 5, description = "Silk closed-toe court pump heels adorned with fresh-water pearls."),
-                StockItem(name = "Suede Meadow Slide Sandals", category = "Shoes & Sandals", price = 65.00, stockQuantity = 1, lowStockThreshold = 3, description = "Comfortable soft premium lavender suede slides with memory insoles."),
+                StockItem(name = "Stella Champagne Mesh Heels", category = "Shoes & Sandals", price = 115.00, costPrice = 60.00, stockQuantity = 12, lowStockThreshold = 3, description = "Gorgeous 3-inch champagne stiletto heels with rhinestone straps."),
+                StockItem(name = "Isla Pearl White Bridal Heel", category = "Shoes & Sandals", price = 130.00, costPrice = 75.00, stockQuantity = 4, lowStockThreshold = 5, description = "Silk closed-toe court pump heels adorned with fresh-water pearls."),
+                StockItem(name = "Suede Meadow Slide Sandals", category = "Shoes & Sandals", price = 65.00, costPrice = 35.00, stockQuantity = 1, lowStockThreshold = 3, description = "Comfortable soft premium lavender suede slides with memory insoles."),
                 
                 // Perfumes
-                StockItem(name = "Nectar Bloom Eau de Parfum", category = "Perfumes", price = 95.00, stockQuantity = 20, lowStockThreshold = 5, description = "Delightful feminine scent featuring sweet peony and white musk notes."),
-                StockItem(name = "Royal Oud Luxury Perfume Oil", category = "Perfumes", price = 150.00, stockQuantity = 2, lowStockThreshold = 3, description = "Deep mystical Unisex Cambodian Oud mixed with damask rose extracts."),
+                StockItem(name = "Nectar Bloom Eau de Parfum", category = "Perfumes", price = 95.00, costPrice = 50.00, stockQuantity = 20, lowStockThreshold = 5, description = "Delightful feminine scent featuring sweet peony and white musk notes."),
+                StockItem(name = "Royal Oud Luxury Perfume Oil", category = "Perfumes", price = 150.00, costPrice = 85.00, stockQuantity = 2, lowStockThreshold = 3, description = "Deep mystical Unisex Cambodian Oud mixed with damask rose extracts."),
                 
                 // Children's Clothing
-                StockItem(name = "Floral Ruffle Cotton Kids Dress", category = "Children's Clothing", price = 48.00, stockQuantity = 10, lowStockThreshold = 3, description = "100% fine cotton vintage-styled rose floral print dress for ages 2-6."),
-                StockItem(name = "Linen Suspenders Infant Set", category = "Children's Clothing", price = 52.00, stockQuantity = 2, lowStockThreshold = 4, description = "Charming beige organic linen shorts and white collared shirt set.")
+                StockItem(name = "Floral Ruffle Cotton Kids Dress", category = "Children's Clothing", price = 48.00, costPrice = 25.00, stockQuantity = 10, lowStockThreshold = 3, description = "100% fine cotton vintage-styled rose floral print dress for ages 2-6."),
+                StockItem(name = "Linen Suspenders Infant Set", category = "Children's Clothing", price = 52.00, costPrice = 28.00, stockQuantity = 2, lowStockThreshold = 4, description = "Charming beige organic linen shorts and white collared shirt set.")
             )
 
             for (item in items) {

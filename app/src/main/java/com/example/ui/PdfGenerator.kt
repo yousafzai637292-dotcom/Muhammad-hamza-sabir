@@ -6,6 +6,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.graphics.BitmapFactory
+import android.graphics.RectF
 import com.example.data.Invoice
 import com.example.data.InvoiceItem
 import java.io.File
@@ -165,6 +167,50 @@ object PdfGenerator {
                 accentStyle = "Neon",
                 tagline = "Neon Noir - Avant-Garde Streetwear & Glamour Optics"
             )
+            13 -> InvoiceTheme(
+                primaryColorHex = "#0D3B66", // Enterprise Navy Blue
+                secondaryColorHex = "#F4D35E", // Tech Amber Gold
+                bannerBgColorHex = "#EEF4F8", // Soft ice-blue
+                pageBgColorHex = "#FFFFFF",
+                isPageBgDark = false,
+                isHeaderDark = false,
+                typefaceType = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL),
+                accentStyle = "Enterprise",
+                tagline = "Enterprise Blue - Corporate Structured Logistics & Supply"
+            )
+            14 -> InvoiceTheme(
+                primaryColorHex = "#556B2F", // Dark Olive / Matcha Green
+                secondaryColorHex = "#B5A642", // Soft brass
+                bannerBgColorHex = "#F3F7F0", // Warm organic sage
+                pageBgColorHex = "#FFFFFF",
+                isPageBgDark = false,
+                isHeaderDark = false,
+                typefaceType = Typeface.create(Typeface.SERIF, Typeface.NORMAL),
+                accentStyle = "Matcha",
+                tagline = "Matcha Tea - Pure Eco-Linen Organic Attire"
+            )
+            15 -> InvoiceTheme(
+                primaryColorHex = "#800020", // Deep aristocratic Crimson
+                secondaryColorHex = "#C59B27", // Golden yellow highlight
+                bannerBgColorHex = "#FDF5E6", // Rich textured old-lace
+                pageBgColorHex = "#FFFFFF",
+                isPageBgDark = false,
+                isHeaderDark = false,
+                typefaceType = Typeface.create(Typeface.SERIF, Typeface.NORMAL),
+                accentStyle = "Prestige",
+                tagline = "Prestige Crimson - Haute Couture & Selective Craftsmanship"
+            )
+            16 -> InvoiceTheme(
+                primaryColorHex = "#4A154B", // Rich Plum Blackberry
+                secondaryColorHex = "#E0115F", // Vibrant magenta accent
+                bannerBgColorHex = "#FAF4FA", // Lilac splash
+                pageBgColorHex = "#FFFFFF",
+                isPageBgDark = false,
+                isHeaderDark = false,
+                typefaceType = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL),
+                accentStyle = "Plum",
+                tagline = "Plum Velvet - Exquisite Materials & Luxury Threading"
+            )
             else -> InvoiceTheme(
                 primaryColorHex = "#7A2048",
                 secondaryColorHex = "#B58A30",
@@ -174,7 +220,7 @@ object PdfGenerator {
                 isHeaderDark = false,
                 typefaceType = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL),
                 accentStyle = "Royal",
-                tagline = "Boutique Retail - Premium Selection & Styling"
+                tagline = "One Business Solution - Premium Selection & Management"
             )
         }
     }
@@ -202,22 +248,57 @@ object PdfGenerator {
         paint.color = Color.parseColor(theme.pageBgColorHex)
         canvas.drawRect(0f, 0f, 595f, 842f, paint)
 
-        // Draw top banner background accent
-        paint.color = Color.parseColor(theme.bannerBgColorHex)
-        canvas.drawRect(0f, 0f, 595f, 120f, paint)
-
-        // Draw Branding Header Area / Logo square background
-        paint.color = Color.parseColor(theme.primaryColorHex)
-        canvas.drawRect(40f, 30f, 90f, 80f, paint)
-
-        // Draw Logo text
-        textPaint.apply {
-            color = Color.WHITE
-            textSize = 20f
-            typeface = Typeface.create(theme.typefaceType, Typeface.BOLD)
+        if (theme.accentStyle != "Minimalist" && theme.accentStyle != "Matcha") {
+            // Draw top banner background accent
+            paint.color = Color.parseColor(theme.bannerBgColorHex)
+            canvas.drawRect(0f, 0f, 595f, 120f, paint)
+        } else {
+            // Draw double-border thin lines frame around the page (Luxury/Nature minimalist style)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1f
+            paint.color = Color.parseColor(theme.primaryColorHex)
+            canvas.drawRect(20f, 20f, 575f, 822f, paint)
+            paint.style = Paint.Style.FILL
         }
-        val logoText = invoice.businessLogoText.take(2).uppercase()
-        canvas.drawText(logoText, 48f, 63f, textPaint)
+
+        if (theme.accentStyle == "Enterprise") {
+            // Corporate left vertical stripe
+            paint.color = Color.parseColor(theme.primaryColorHex)
+            canvas.drawRect(0f, 0f, 15f, 842f, paint)
+        }
+
+        // Draw Branding Header Area / Logo square background or brand logo image if exists
+        val logoFile = File(context.filesDir, "brand_logo.png")
+        val prefs = context.getSharedPreferences("boutique_prefs", Context.MODE_PRIVATE)
+        val showLogo = prefs.getBoolean("show_logo", true)
+        
+        var logoDrawn = false
+        if (showLogo && logoFile.exists()) {
+            try {
+                val bitmap = BitmapFactory.decodeFile(logoFile.absolutePath)
+                if (bitmap != null) {
+                    val destRect = RectF(40f, 30f, 90f, 80f)
+                    canvas.drawBitmap(bitmap, null, destRect, paint)
+                    logoDrawn = true
+                }
+            } catch (e: Exception) {
+                // fall through to text logo
+            }
+        }
+        
+        if (!logoDrawn) {
+            paint.color = Color.parseColor(theme.primaryColorHex)
+            canvas.drawRect(40f, 30f, 90f, 80f, paint)
+
+            // Draw Logo text
+            textPaint.apply {
+                color = Color.WHITE
+                textSize = 20f
+                typeface = Typeface.create(theme.typefaceType, Typeface.BOLD)
+            }
+            val logoText = invoice.businessLogoText.take(2).uppercase()
+            canvas.drawText(logoText, 48f, 63f, textPaint)
+        }
 
         // Draw Brand Name
         textPaint.apply {
@@ -312,7 +393,7 @@ object PdfGenerator {
         canvas.drawText("Category", 230f, 277f, textPaint)
         canvas.drawText("Unit Price", 360f, 277f, textPaint)
         canvas.drawText("Qty", 442f, 277f, textPaint)
-        canvas.drawText("Total ($)", 495f, 277f, textPaint)
+        canvas.drawText("Total (PKR)", 495f, 277f, textPaint)
 
         // Draw Table Row Items
         var currentY = 310f
@@ -334,60 +415,76 @@ object PdfGenerator {
             }
 
             canvas.drawText(truncatedName, 50f, currentY, textPaint)
+            
+            // Draw original S.P. and Discount subtitle if discount was applied
+            if (item.discountPerUnit > 0.0) {
+                val subtextPaint = Paint().apply {
+                    textSize = 7.5f
+                    color = Color.parseColor("#D32F2F") // nice professional red for discounts
+                    typeface = Typeface.create(theme.typefaceType, Typeface.ITALIC)
+                }
+                val discSubtext = String.format(Locale.US, "Original S.P: PKR %.2f | Discount: -PKR %.2f", item.originalPrice, item.discountPerUnit)
+                canvas.drawText(discSubtext, 50f, currentY + 10f, subtextPaint)
+            }
+
             canvas.drawText(item.category, 230f, currentY, textPaint)
 
-            val unitPriceStr = String.format(Locale.US, "$%.2f", item.unitPrice)
+            val unitPriceStr = String.format(Locale.US, "PKR %.2f", item.unitPrice)
             canvas.drawText(unitPriceStr, 360f, currentY, textPaint)
             canvas.drawText(item.quantity.toString(), 442f, currentY, textPaint)
 
-            val totalStr = String.format(Locale.US, "$%.2f", item.totalPrice)
+            val totalStr = String.format(Locale.US, "PKR %.2f", item.totalPrice)
             canvas.drawText(totalStr, 495f, currentY, textPaint)
 
-            currentY += 30f
+            val rowHeight = if (item.discountPerUnit > 0.0) 38f else 28f
+            currentY += rowHeight
             if (currentY > 700f) break // page overflow protection
         }
 
         // Draw Summary Totals Box
         paint.color = Color.parseColor(theme.bannerBgColorHex)
-        canvas.drawRect(330f, currentY + 10f, 555f, currentY + 115f, paint)
+        canvas.drawRect(330f, currentY + 10f, 555f, currentY + 130f, paint)
 
         textPaint.apply {
-            textSize = 10f
+            textSize = 9.5f
             color = normalTextColor
             typeface = Typeface.create(theme.typefaceType, Typeface.NORMAL)
         }
-        canvas.drawText("Subtotal:", 350f, currentY + 32f, textPaint)
-        canvas.drawText("Discount:", 350f, currentY + 52f, textPaint)
-        canvas.drawText("Sales Tax (GST):", 350f, currentY + 72f, textPaint)
+        canvas.drawText("Subtotal:", 350f, currentY + 30f, textPaint)
+        canvas.drawText("Discount:", 350f, currentY + 48f, textPaint)
+        canvas.drawText("Sales Tax (GST):", 350f, currentY + 66f, textPaint)
+        canvas.drawText("Delivery Charges:", 350f, currentY + 84f, textPaint)
 
         textPaint.apply {
             typeface = Typeface.create(theme.typefaceType, Typeface.BOLD)
             color = Color.parseColor(theme.primaryColorHex)
-            textSize = 11f
+            textSize = 10.5f
         }
-        canvas.drawText("Grand Total:", 350f, currentY + 98f, textPaint)
+        canvas.drawText("Grand Total:", 350f, currentY + 112f, textPaint)
 
         // Draw values right-aligned inside the totals box
         textPaint.apply {
             typeface = Typeface.create(theme.typefaceType, Typeface.NORMAL)
             color = normalTextColor
-            textSize = 10f
+            textSize = 9.5f
         }
-        val subtotalStr = String.format(Locale.US, "$%.2f", invoice.subtotal)
-        val discountStr = String.format(Locale.US, "$%.2f", invoice.discount)
-        val taxStr = String.format(Locale.US, "$%.2f", invoice.tax)
-        val grandTotalStr = String.format(Locale.US, "$%.2f", invoice.totalAmount)
+        val subtotalStr = String.format(Locale.US, "PKR %.2f", invoice.subtotal)
+        val discountStr = String.format(Locale.US, "PKR %.2f", invoice.discount)
+        val taxStr = String.format(Locale.US, "PKR %.2f", invoice.tax)
+        val deliveryStr = String.format(Locale.US, "PKR %.2f", invoice.deliveryCharges)
+        val grandTotalStr = String.format(Locale.US, "PKR %.2f", invoice.totalAmount)
 
-        canvas.drawText(subtotalStr, 480f, currentY + 32f, textPaint)
-        canvas.drawText("-$" + discountStr, 480f, currentY + 52f, textPaint)
-        canvas.drawText("+$" + taxStr, 480f, currentY + 72f, textPaint)
+        canvas.drawText(subtotalStr, 460f, currentY + 30f, textPaint)
+        canvas.drawText("-" + discountStr, 460f, currentY + 48f, textPaint)
+        canvas.drawText("+" + taxStr, 460f, currentY + 66f, textPaint)
+        canvas.drawText("+" + deliveryStr, 460f, currentY + 84f, textPaint)
 
         textPaint.apply {
             typeface = Typeface.create(theme.typefaceType, Typeface.BOLD)
             color = Color.parseColor(theme.primaryColorHex)
-            textSize = 11f
+            textSize = 10.5f
         }
-        canvas.drawText(grandTotalStr, 480f, currentY + 98f, textPaint)
+        canvas.drawText(grandTotalStr, 460f, currentY + 112f, textPaint)
 
         // Draw Terms Notes / Brand Footer with theme style
         textPaint.apply {
@@ -403,7 +500,7 @@ object PdfGenerator {
             textSize = 8f
             color = secondaryTextColor
         }
-        val customNote = invoice.notes.ifEmpty { "Thank you for supporting our boutique. Exchange within 7 days." }
+        val customNote = invoice.notes.ifEmpty { "Thank you for supporting our business. Exchange within 7 days." }
         val finalNotes = if (customNote.length > 55) customNote.take(53) + "..." else customNote
         canvas.drawText(finalNotes, 40f, currentY + 45f, textPaint)
         canvas.drawText("Standard 8% Sales Tax (GST) binds layout configurations safely.", 40f, currentY + 58f, textPaint)
@@ -427,7 +524,7 @@ object PdfGenerator {
         if (publicDir != null && !publicDir.exists()) {
             publicDir.mkdirs()
         }
-        val invoiceFile = File(publicDir, "BoutiqueInvoice_${invoice.invoiceNumber}.pdf")
+        val invoiceFile = File(publicDir, "BusinessInvoice_${invoice.invoiceNumber}.pdf")
         return try {
             val fos = FileOutputStream(invoiceFile)
             pdfDocument.writeTo(fos)
@@ -504,7 +601,7 @@ object PdfGenerator {
             textSize = 18f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText(String.format(Locale.US, "$%.2f", totalSales), 50f, 175f, textPaint)
+        canvas.drawText(String.format(Locale.US, "PKR %.2f", totalSales), 50f, 175f, textPaint)
         canvas.drawText("$paidInvoicesCount / $totalInvoicesCount Bills", 215f, 175f, textPaint)
         canvas.drawText("$unpaidInvoicesCount Unpaid Bills", 395f, 175f, textPaint)
 
@@ -514,7 +611,7 @@ object PdfGenerator {
             textSize = 12f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText("Boutique Departmental Breakdown", 40f, 240f, textPaint)
+        canvas.drawText("Departmental Business Breakdown", 40f, 240f, textPaint)
 
         paint.color = Color.parseColor("#7A2048")
         paint.strokeWidth = 1f
@@ -526,7 +623,7 @@ object PdfGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        val categories = listOf("Cosmetics", "Shoes & Sandals", "Perfumes", "Children's Clothing")
+        val categories = categorySplits.keys.toList()
         for (cat in categories) {
             val totalCatSale = categorySplits[cat] ?: 0.0
             
@@ -547,7 +644,7 @@ object PdfGenerator {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 color = Color.parseColor("#7A2048")
             }
-            canvas.drawText(String.format(Locale.US, "$%.2f", totalCatSale), 470f, splitY, textPaint)
+            canvas.drawText(String.format(Locale.US, "PKR %.2f", totalCatSale), 470f, splitY, textPaint)
             textPaint.apply {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                 color = Color.BLACK
@@ -575,7 +672,7 @@ object PdfGenerator {
         canvas.drawText("Client Name", 150f, 420f, textPaint)
         canvas.drawText("Date", 280f, 420f, textPaint)
         canvas.drawText("Status", 390f, 420f, textPaint)
-        canvas.drawText("Amount ($)", 490f, 420f, textPaint)
+        canvas.drawText("Amount (PKR)", 490f, 420f, textPaint)
 
         var itemY = 445f
         textPaint.apply {
@@ -609,7 +706,7 @@ object PdfGenerator {
             canvas.drawText(inv.paymentStatus.uppercase(), 395f, itemY - 1f, textPaint)
 
             textPaint.color = Color.BLACK
-            canvas.drawText(String.format(Locale.US, "$%.2f", inv.totalAmount), 490f, itemY, textPaint)
+            canvas.drawText(String.format(Locale.US, "PKR %.2f", inv.totalAmount), 490f, itemY, textPaint)
 
             itemY += 24f
             if (itemY > 780f) break
@@ -633,7 +730,7 @@ object PdfGenerator {
         if (publicDir != null && !publicDir.exists()) {
             publicDir.mkdirs()
         }
-        val reportFile = File(publicDir, "BoutiqueSalesReport.pdf")
+        val reportFile = File(publicDir, "BusinessSalesReport.pdf")
         return try {
             val fos = FileOutputStream(reportFile)
             pdfDocument.writeTo(fos)
